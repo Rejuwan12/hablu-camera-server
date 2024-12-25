@@ -4,14 +4,44 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors({
-    origin:"http://localhost:5173",
-    optionsSuccessStatus:200,
-}));
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    optionsSuccessStatus: 200,
+  })
+);
 app.use(express.json());
+
+// tokenVerify
+const verifyJWT = (req, res, next) => {
+  const authorization = req.header.authorization;
+  if (!authorization) {
+    return res.send({ message: "No Token" });
+  }
+  const token = authorization.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_KEY_TOKEN, (err, decoded) => {
+    if (err) {
+      return res.send({ message: "Invalid Token" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+};
+
+// verify Seller
+
+const verifySeller = async (req, res, next) => {
+  const email = req.decoded.email;
+  const query = { email: email };
+  const user = await userCollection.findOne(query);
+  if (user?.role !== "seller") {
+    return res.send({ message: "Forbidden Access" });
+  }
+  next();
+};
 
 // mongodb
 
@@ -48,6 +78,13 @@ const dbConnect = async () => {
         return res.send({ message: "User Already Exist" });
       }
       const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    // add-product
+    app.post("/add-products", verifyJWT, verifySeller, async (req, res) => {
+      const product = req.body;
+      const result = await productCollection.insertOne(product);
       res.send(result);
     });
   } catch (error) {
